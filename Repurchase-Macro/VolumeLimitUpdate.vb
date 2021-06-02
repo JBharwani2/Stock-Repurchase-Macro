@@ -1,7 +1,7 @@
 ﻿Imports mshtml
 
-Module ConditionLimitRefresh
-    Sub ConditionLimitRefresh()
+Module VolumeLimitUpdate
+    Sub VolumeLimitUpdate()
         '
         ' ConditionLimitRefresh Macro
         ' Created by Jeremy Bharwani on 5/27/21
@@ -9,7 +9,12 @@ Module ConditionLimitRefresh
         '
         '   This macro can be used to update the volume limit sheet with all data since the last time it was updated. It
         '   disregards weekends and holidays and divides each week with a border. Equations and formatting is also
-        '   done automatically as needed. If sheet is already up to date, nothing will change.
+        '   done automatically as needed. If sheet is already up to date, nothing will change. Only updates all fully
+        '   completed days (not current day while market is still open). The bottom most line will show a forecast of the
+        '   next day's condition limit which is useful when approaching a Monday. The range for the condition limit
+        '   equation is updated anytime there is a 2 day or more gap from the previous entry (this is when the border
+        '   is created).
+        '   Website: MarketWatch.com (yahoo rounds volume and nasdaq does not allow for scraping)
         '
         '   WARNING: Do not alter cell J2, it is used as a temporary holding place during the macro process.
         '
@@ -24,42 +29,42 @@ Module ConditionLimitRefresh
 
 
         'SET EXCEL LOCATIONS ---------------------------------------------------------------------------------------------
-        FindEndOfData(row:=row)
-        FourWeekRange(four_week_start:=four_week_start, four_week_end:=four_week_end, row:=row)
+        FindEndOfData row:=row
+        FourWeekRange four_week_start:=four_week_start, four_week_end:=four_week_end, row:=row
     
  
         'CONNECTS TO WEBPAGE ---------------------------------------------------------------------------------------------
-            Set http = CreateObject("MSXML2.XMLHTTP")
-            http.Open "GET", "https://finance.yahoo.com/quote/CPSS/history", False
-            http.send
+        Set http = CreateObject("MSXML2.XMLHTTP")
+        http.Open "GET", "https://www.marketwatch.com/investing/stock/cpss/download-data", False
+        http.send
         html.body.innerHTML = http.responseText
     
  
         'DATA GRAB --------------------------------------------------------------------------------------------------------
-            'Scrapes data from top row of yahoo finance's historical data page
-            Set Table = html.getElementsByClassName("BdT Bdc($seperatorColor) Ta(end) Fz(s) Whs(nw)")
-            Set Data = Table(0)
-            backlog_num = -1
+        'Scrapes data from top row of yahoo finance's historical data page
+        Set Table = html.getElementsByTagName("tbody")(4)
+        Set Data = Table.Children(0)
+        backlog_num = -1
 
-        'Sets place-holder
-        Sheets("volume limit").Range("J" & 2).Value = Format(Data.Children(0).innerText, "M/d/yyyy")
-        'Uses place-holder
-        GetBacklog(Table:=Table, backlog_num:=backlog_num, row:=row)
-        'Clears place-holder
+        'Sets place-holder with date
+        Sheets("volume limit").Range("J" & 2).Value = Format(Data.Children(0).Children(0).innerText, "M/d/yyyy")
+        'Uses place-holder with date
+        GetBacklog Table:=Table, backlog_num:=backlog_num, row:=row
+        'Clears place-holder with date
         Sheets("volume limit").Range("J" & 2).Value = ""
 
         'Fills in each column with values or formulas (loop depends on number of un-updated days since last update)
         While backlog_num >= 0
-            Set Data = Table(backlog_num)
+            Set Data = Table.Children(backlog_num)
     
-            Sheets("volume limit").Range("A" & row).Value = Format(Data.Children(0).innerText, "M/d/yyyy")
-            SeparateWeeks(four_week_start:=four_week_start, four_week_end:=four_week_end, row:=row)
+            Sheets("volume limit").Range("A" & row).Value = Format(Data.Children(0).Children(0).innerText, "M/d/yyyy")
+            SeparateWeeks four_week_start:=four_week_start, four_week_end:=four_week_end, row:=row
 
             Sheets("volume limit").Range("B" & row).Value = Data.Children(1).innerText
             Sheets("volume limit").Range("C" & row).Value = Data.Children(2).innerText
             Sheets("volume limit").Range("D" & row).Value = Data.Children(3).innerText
             Sheets("volume limit").Range("E" & row).Value = Data.Children(4).innerText
-            Sheets("volume limit").Range("F" & row).Value = Data.Children(6).innerText
+            Sheets("volume limit").Range("F" & row).Value = Data.Children(5).innerText
             Sheets("volume limit").Range("G" & row).Formula = "=ROUND(AVERAGE($F$" & four_week_start & ":$F$" & four_week_end & ")*0.25,-2)"
             Sheets("volume limit").Range("H" & row).Formula = "=IFERROR(VLOOKUP($A" & row & ",Activity!$A$7:$I$801,3,FALSE),0)"
             Sheets("volume limit").Range("I" & row).Formula = "=IF(H" & row & "<G" & row & "," & Chr(34) & Chr(34) & ",+H" & row & "-G" & row & ")"
@@ -75,7 +80,8 @@ Module ConditionLimitRefresh
             backlog_num = backlog_num - 1
         Wend
     
-        MsgBox("Volume Limit Sheet has been updated to current date")
+        LimitForecast four_week_start:=four_week_start, four_week_end:=four_week_end, row:=row
+        MsgBox "Volume Limit Sheet has been updated to current date"
     End Sub
 
 
@@ -102,7 +108,6 @@ Module ConditionLimitRefresh
             End If
             four_week_start = four_week_start - 1
         Wend
-
         four_week_start = four_week_start + 1
         i = 0
         While i < 1
@@ -119,8 +124,8 @@ Module ConditionLimitRefresh
     Public Sub GetBacklog(Table, ByRef backlog_num As Integer, row As Integer)
         While Sheets("volume limit").Range("A" & row - 1) <> Sheets("volume limit").Range("J" & 2).Value
             backlog_num = backlog_num + 1
-            Set Data = Table(backlog_num + 1)
-            Sheets("volume limit").Range("J" & 2).Value = Format(Data.Children(0).innerText, "M/d/yyyy")
+            Set Data = Table.Children(backlog_num + 1)
+            Sheets("volume limit").Range("J" & 2).Value = Format(Data.Children(0).Children(0).innerText, "M/d/yyyy")
         Wend
     End Sub
 
@@ -132,6 +137,20 @@ Module ConditionLimitRefresh
             Sheets("volume limit").Range("A" & row & ":F" & row).Borders(xlEdgeTop).LineStyle = XlLineStyle.xlContinuous
             FourWeekRange four_week_start:=four_week_start, four_week_end:=four_week_end, row:=row
         End If
+    End Sub
+
+
+
+    'Creates forecast for the next condition limit, only useful for the start of a new week
+    Public Sub LimitForecast(ByRef four_week_start As Integer, ByRef four_week_end As Integer, row As Integer)
+        If DateTime.Date - Sheets("volume limit").Range("A" & row - 1) > 2 Then
+            Sheets("volume limit").Range("A" & row & ":F" & row).Borders(xlEdgeTop).LineStyle = XlLineStyle.xlContinuous
+            FourWeekRange four_week_start:=four_week_start, four_week_end:=four_week_end, row:=row
+        End If
+        Sheets("volume limit").Range("G" & row).Formula = "=ROUND(AVERAGE($F$" & four_week_start & ":$F$" & four_week_end & ")*0.25,-2)"
+        Sheets("volume limit").Range("G" & row - 1).Copy
+        Sheets("volume limit").Range("G" & row).PasteSpecial Paste:=xlPasteFormats
+        Application.CutCopyMode = False
     End Sub
 
 End Module

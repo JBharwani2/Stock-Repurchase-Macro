@@ -181,7 +181,7 @@
   -->
   <ItemGroup>
     <AppDesigner Include="My Project\" />
-    <Compile Include="ConditionLimitRefresh.vb" />
+    <Compile Include="VolumeLimitUpdate.vb" />
     <Compile Include="ThisAddIn.vb">
       <SubType>Code</SubType>
     </Compile>
