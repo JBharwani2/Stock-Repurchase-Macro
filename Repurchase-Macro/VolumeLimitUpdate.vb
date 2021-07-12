@@ -34,7 +34,7 @@
  
 'CONNECTS TO WEBPAGE ---------------------------------------------------------------------------------------------
     Set http = CreateObject("MSXML2.XMLHTTP")
-    http.Open "GET", "https://www.marketwatch.com/investing/stock/cpss/download-data", False
+    http.Open "GET", "https://www.marketwatch.com/investing/stock/{TICKER}/download-data", False
     http.send
     html.body.innerHTML = http.responseText
     
